@@ -16,6 +16,7 @@ SET(CONTRIB_SCRIPTS_SRCS
     vmtkthreshold.py
     vmtkmeshmerge.py
     vmtkentityrenumber.py
+    vmtkpcvwriter.py
   )
   
 SET(CONTRIB_MODULE_SRCS
