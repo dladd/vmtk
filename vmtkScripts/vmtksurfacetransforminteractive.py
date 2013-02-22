@@ -185,6 +185,7 @@ class vmtkSurfaceTransformInteractive(pypes.pypeScript):
         self.Surface = self.TransformedSurface
  
         self.Matrix4x4 = self.Transform.GetMatrix()
+        print self.Matrix4x4
  
         if self.OwnRenderer:
             self.vmtkRenderer.Deallocate()
