@@ -45,7 +45,7 @@ class vmtkMeshWriter(pypes.pypeScript):
         self.SetInputMembers([
             ['Mesh','i','vtkUnstructuredGrid',1,'','the input mesh','vmtkmeshreader'],
             ['Format','f','str',1,
-             '["vtkxml","vtk","xda","fdneut","tecplot","lifev","dolfin","fluent","tetgen","pointdata"]',
+             '["vtkxml","vtk","xda","fdneut","tecplot","lifev","dolfin","fluent","tetgen","pointdata","fieldml"]',
              'file format (xda - libmesh ASCII format, fdneut - FIDAP neutral format)'],
             ['GuessFormat','guessformat','bool',1,'','guess file format from extension'],
             ['Compressed','compressed','bool',1,'','output gz compressed file (dolfin only)'],
@@ -314,6 +314,82 @@ class vmtkMeshWriter(pypes.pypeScript):
             line = line + '\n'
             f.write(line)
 
+    def WriteFieldmlMeshFile(self):
+        if (self.OutputFileName == ''):
+            self.PrintError('Error: no OutputFileName.')
+        self.PrintLog('Writing Fieldml files.')
+
+        self.Mesh.BuildLinks()
+
+        cellEntityIdsArray = vtk.vtkIntArray()
+        cellEntityIdsArray.DeepCopy(self.Mesh.GetCellData().GetArray(self.CellEntityIdsArrayName))
+
+        tetraCellType = 10
+        triangleCellType = 5
+
+        # write node coordinates file (.C)
+        FieldmlFileName=self.OutputFileName + '.C'
+        f=open(FieldmlFileName, 'w')
+        firstLine = "%d\n" % self.Mesh.GetNumberOfPoints()
+        f.write(firstLine)
+        for i in range(self.Mesh.GetNumberOfPoints()):
+            point = self.Mesh.GetPoint(i)
+            line = "%f %f %f\n" % (point[0], point[1], point[2])
+            f.write(line)
+        f.close()
+
+        #write boundary nodes (.B)- 
+        for i in range(self.Mesh.GetNumberOfPoints()):
+            pointCells = vtk.vtkIdList()
+            self.Mesh.GetPointCells(i,pointCells)
+            minTriangleCellEntityId = -1
+            tetraCellEntityId = -1
+            for j in range(pointCells.GetNumberOfIds()):
+                cellId = pointCells.GetId(j)
+                if self.Mesh.GetCellType(cellId) == triangleCellType:
+                    cellEntityId = cellEntityIdsArray.GetValue(cellId)
+                    if cellEntityId < minTriangleCellEntityId or minTriangleCellEntityId == -1:
+                        minTriangleCellEntityId = cellEntityId
+                else:
+                    tetraCellEntityId = cellEntityIdsArray.GetValue(cellId)
+            cellEntityId = tetraCellEntityId
+            if minTriangleCellEntityId != -1:
+                cellEntityId = minTriangleCellEntityId
+            if cellEntityId > 0 :
+                k = i + 1
+                line = " %d\n" % i
+                FieldmlFileName=self.OutputFileName + '.' + str(cellEntityId) + '.B'
+                f=open(FieldmlFileName, 'a')            
+                f.write(line)
+                f.close()
+
+        #write element map file (.M)
+        triangleFilter = vtk.vtkDataSetTriangleFilter()
+        triangleFilter.SetInput(self.Mesh)
+        triangleFilter.Update()
+        self.Mesh = triangleFilter.GetOutput()
+
+        FieldmlFileName=self.OutputFileName + '.M'
+        f=open(FieldmlFileName, 'w')
+        tetraCellIdArray = vtk.vtkIdTypeArray()
+        self.Mesh.GetIdsOfCellsOfType(tetraCellType,tetraCellIdArray)
+        numberOfTetras = tetraCellIdArray.GetNumberOfTuples()
+        self.PrintLog('Number of tets: ' + str(numberOfTetras))
+        line = "%d\n" % numberOfTetras
+        f.write(line)
+        for i in range(numberOfTetras):
+            tetraCellId = tetraCellIdArray.GetValue(i) 
+            cellPointIds = self.Mesh.GetCell(tetraCellId).GetPointIds()
+            line = ''
+            for j in range(cellPointIds.GetNumberOfIds()):
+                if j>0:
+                    line += ' '
+                line = line + str(cellPointIds.GetId(j)+1)
+#                line = line + "%d" % (cellPointIds.GetId(j)+1)
+            line += '\n'
+            f.write(line)
+#        f.close()
+
     def Execute(self):
 
         if self.Mesh == None:
@@ -332,7 +408,8 @@ class vmtkMeshWriter(pypes.pypeScript):
                             'tec':'tecplot',
                             'node':'tetgen',
                             'ele':'tetgen',
-                            'dat':'pointdata'}
+                            'dat':'pointdata',
+                            'fieldml':'fieldml'}
 
         if self.OutputFileName == 'BROWSER':
             import tkFileDialog
@@ -371,6 +448,8 @@ class vmtkMeshWriter(pypes.pypeScript):
             self.WriteTetGenMeshFile()
         elif (self.Format == 'pointdata'):
             self.WritePointDataMeshFile()
+        elif (self.Format == 'fieldml'):
+            self.WriteFieldmlMeshFile()
         else:
             self.PrintError('Error: unsupported format '+ self.Format + '.')
 
