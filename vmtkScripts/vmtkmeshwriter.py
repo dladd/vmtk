@@ -45,7 +45,7 @@ class vmtkMeshWriter(pypes.pypeScript):
         self.SetInputMembers([
             ['Mesh','i','vtkUnstructuredGrid',1,'','the input mesh','vmtkmeshreader'],
             ['Format','f','str',1,
-             '["vtkxml","vtk","xda","fdneut","tecplot","lifev","dolfin","fluent","tetgen","pointdata","fieldml"]',
+             '["vtkxml","vtk","xda","fdneut","tecplot","lifev","dolfin","fluent","tetgen","pointdata","fieldml","fieldmlhex"]',
              'file format (xda - libmesh ASCII format, fdneut - FIDAP neutral format)'],
             ['GuessFormat','guessformat','bool',1,'','guess file format from extension'],
             ['Compressed','compressed','bool',1,'','output gz compressed file (dolfin only)'],
@@ -390,6 +390,61 @@ class vmtkMeshWriter(pypes.pypeScript):
             f.write(line)
 #        f.close()
 
+    def WriteFieldmlHexMeshFile(self):
+        if (self.OutputFileName == ''):
+            self.PrintError('Error: no OutputFileName.')
+        self.PrintLog('Writing Fieldml files for hexahedra.')
+        self.Mesh.BuildLinks()
+
+        quadCellType = 28
+        hexahedronCellType = 29
+
+        # write node coordinates file (.C)
+        self.PrintLog('...Writing Fieldml coordinates (.C) file for hexahedra.')
+        FieldmlFileName=self.OutputFileName + '.C'
+        f=open(FieldmlFileName, 'w')
+        firstLine = "%d\n" % self.Mesh.GetNumberOfPoints()
+        f.write(firstLine)
+        for i in range(self.Mesh.GetNumberOfPoints()):
+            point = self.Mesh.GetPoint(i)
+            line = "%f %f %f\n" % (point[0], point[1], point[2])
+            f.write(line)
+        f.close()
+
+        #write element map file (.M)
+        self.PrintLog('...Writing Fieldml element map (.M) file for hexahedra.')
+
+        # VTK to fieldml numbering convention conversion
+        # 0  1  2  3  4  5  6  7  8  9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26
+        # 0  2  8  6  18 20 26 24 1  5  7   3   19  23  25  21  9   11  17  15  12  14  10  16  4   22  13
+        # 0,8,1,11,24,9,3,10,2,16,22,17,20,26,21,19,23,18,4,12,5,15,25,13,7,14,6 
+        
+#        cmissMap=[0,2,8,6,18,20,26,24,1,5,7,3,19,23,25,21,9,11,17,15,12,14,10,16,4,22,13]
+#        cmissMap=[0,8,1,11,24,9,3,10,2,16,22,17,20,26,21,19,23,18,4,12,5,15,25,13,7,14,6]
+
+        cmissMap=[0,8,1,11,24,9,3,10,2,16,22,17,20,26,21,19,23,18,4,12,5,15,25,13,7,14,6]
+
+        FieldmlFileName=self.OutputFileName + '.M'
+        f=open(FieldmlFileName, 'w')
+        hexahedronCellIdArray = vtk.vtkIdTypeArray()
+        self.Mesh.GetIdsOfCellsOfType(hexahedronCellType,hexahedronCellIdArray)
+        numberOfHexahedra = hexahedronCellIdArray.GetNumberOfTuples()
+        self.PrintLog('Number of hexahedra: ' + str(numberOfHexahedra))
+        line = "%d\n" % numberOfHexahedra
+        f.write(line)
+        for i in range(numberOfHexahedra):
+            hexahedronCellId = hexahedronCellIdArray.GetValue(i) 
+            cellPointIds = self.Mesh.GetCell(hexahedronCellId).GetPointIds()
+            line = ''
+            for j in range(cellPointIds.GetNumberOfIds()):
+                if j>0:
+                    line += ' '
+                line = line + str(cellPointIds.GetId(cmissMap[j])+1)
+#                line = line + "%d" % (cellPointIds.GetId(j)+1)
+            line += '\n'
+            f.write(line)
+#        f.close()
+
     def Execute(self):
 
         if self.Mesh == None:
@@ -409,7 +464,8 @@ class vmtkMeshWriter(pypes.pypeScript):
                             'node':'tetgen',
                             'ele':'tetgen',
                             'dat':'pointdata',
-                            'fieldml':'fieldml'}
+                            'fieldml':'fieldml',
+                            'fieldmlhex':'fieldmlhex'}
 
         if self.OutputFileName == 'BROWSER':
             import tkFileDialog
@@ -450,6 +506,8 @@ class vmtkMeshWriter(pypes.pypeScript):
             self.WritePointDataMeshFile()
         elif (self.Format == 'fieldml'):
             self.WriteFieldmlMeshFile()
+        elif (self.Format == 'fieldmlhex'):
+            self.WriteFieldmlHexMeshFile()
         else:
             self.PrintError('Error: unsupported format '+ self.Format + '.')
 
