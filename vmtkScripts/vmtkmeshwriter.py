@@ -423,6 +423,10 @@ class vmtkMeshWriter(pypes.pypeScript):
 #        cmissMap=[0,8,1,11,24,9,3,10,2,16,22,17,20,26,21,19,23,18,4,12,5,15,25,13,7,14,6]
 
         cmissMap=[0,8,1,11,24,9,3,10,2,16,22,17,20,26,21,19,23,18,4,12,5,15,25,13,7,14,6]
+#        cmissMap=[0,8,1,11,24,9,3,10,2,16,20,17,23,26,21,19,22,18,4,12,5,15,25,13,7,14,6]
+#        cmissMap=[0,8,1,11,24,9,3,10,2,16,23,17,22,26,21,19,20,18,4,12,5,15,25,13,7,14,6]
+
+        cmissLinMap=[0,1,3,2,4,5,7,6]
 
         FieldmlFileName=self.OutputFileName + '.M'
         f=open(FieldmlFileName, 'w')
@@ -443,7 +447,20 @@ class vmtkMeshWriter(pypes.pypeScript):
 #                line = line + "%d" % (cellPointIds.GetId(j)+1)
             line += '\n'
             f.write(line)
-#        f.close()
+
+        for i in range(numberOfHexahedra):
+            hexahedronCellId = hexahedronCellIdArray.GetValue(i) 
+            cellPointIds = self.Mesh.GetCell(hexahedronCellId).GetPointIds()
+            line = ''
+            for j in range(8):
+                if j>0:
+                    line += ' '
+                line = line + str(cellPointIds.GetId(cmissLinMap[j])+1)
+#                line = line + "%d" % (cellPointIds.GetId(j)+1)
+            line += '\n'
+            f.write(line)
+
+        f.close()
 
     def Execute(self):
 
